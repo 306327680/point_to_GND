@@ -5,6 +5,9 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include<ceres/ceres.h>
+#include <pcl/registration/ndt.h>      //NDT(正态分布)配准类头文件
+#include <pcl/filters/approximate_voxel_grid.h>   //滤波类头文件  （使用体素网格过滤器处理的效果比较好）
+
 Eigen::Vector3d px,pz(-0.131814,0.0288355,0.990855),py; //平面法向量
 
 //构建代价函数结构体，abc为待优化参数，residual为残差。
@@ -110,7 +113,7 @@ int main() {
 	}
 	ceres::Solver::Options options;
   	options.linear_solver_type=ceres::DENSE_QR;
-  	options.minimizer_progress_to_stdout=false;
+  	options.minimizer_progress_to_stdout=true;
   	ceres::Solver::Summary summary;
   	ceres::Solve(options,&problem,&summary);
 	std::cout<<"x= "<<abc[0]<<std::endl;
@@ -156,7 +159,7 @@ int main() {
 	double parameters[7] = {1, 2, 3, 4, 5, 6, 7};
 	std::cout<<*parameters<<std::endl;
 	std::cout<<*parameters+4<<std::endl;
-	Eigen::Map<Eigen::Quaterniond> q_w_curr(parameters);//放的是指针就比较方便了, 里面的随便改也不影响值
+	
 	// Map类用于通过C++中普通的连续指针或者数组 （raw C/C++ arrays）来构造Eigen里的Matrix类，这就好比Eigen里的Matrix类的数据和raw C++array 共享了一片地址，也就是引用。
 //	1. 比如有个API只接受普通的C++数组，但又要对普通数组进行线性代数操作，那么用它构造为Map类，直接操作Map就等于操作了原始普通数组，省时省力。
 //	2. 再比如有个庞大的Matrix类，在一个大循环中要不断读取Matrix中的一段连续数据，如果你每次都用block operation 去引用数据，太累（虽然block operation 也是引用类型）。
@@ -177,17 +180,36 @@ int main() {
 	a1 = Eigen::Vector3d (0,abc[4]*(-abc[0]/abc[3]) + abc[1],abc[5]*(-abc[0]/abc[3]) + abc[1]);
 	//pz
 	pz.normalize();
-	a2 = a1 + pz;
-	Eigen::Vector3d temp_a3(y_axis[0],y_axis[1],y_axis[2]),temp_a4(abc[0],abc[1],abc[2]);
+	a4 = a1 + pz;//z轴
+	Eigen::Vector3d temp_a3(y_axis[0],y_axis[1],y_axis[2]),temp_a4(abc[0],abc[1],abc[2]);//y轴
 	temp_a3.normalize();
 	a3 = a1 + temp_a3;
-	
-	a4 = a1 + Eigen::Vector3d (0,0,1);
+	Eigen::Vector3d x_axis(abc[3],abc[4],abc[4]);
+	x_aixs.normalize();
+	a2 = a1 + x_aixs;
 	
 	ceres::CostFunction *cost_function_1 =  AxisAxisFitting::Create(p1,a1);
+	ceres::CostFunction *cost_function_2 =  AxisAxisFitting::Create(p2,a2);
+	ceres::CostFunction *cost_function_3 =  AxisAxisFitting::Create(p3,a3);
+	ceres::CostFunction *cost_function_4 =  AxisAxisFitting::Create(p4,a4);
+	
+	problem2.AddResidualBlock(cost_function_1,loss_function,parameters,parameters+4);
+	problem2.AddResidualBlock(cost_function_2,loss_function,parameters,parameters+4);
+	problem2.AddResidualBlock(cost_function_3,loss_function,parameters,parameters+4);
+	problem2.AddResidualBlock(cost_function_4,loss_function,parameters,parameters+4);
+	ceres::Solve(options,&problem2,&summary);
+	Eigen::Map<Eigen::Quaterniond> q_w_curr(parameters);//放的是指针就比较方便了, 里面的随便改也不影响值
 	Eigen::Map<Eigen::Vector3d> t_w_curr(parameters + 4);
 
-
-	//std::cout << summary.FullReport() << "\n";
+	std::cout << t_w_curr << std::endl;
+	std::cout <<"x: "<< q_w_curr.x()<<" y: "<<q_w_curr.y()<<" z: "<<q_w_curr.z()<<" w: "<<q_w_curr.w() << std::endl;
+	pcl::PointCloud<pcl::PointXYZ> tfed;
+	pcl::io::loadPCDFile<pcl::PointXYZ> ("origin.pcd", tfed);
+	Eigen::Isometry3d test;
+	test.setIdentity();
+	test.translate(t_w_curr);
+	test.rotate(q_w_curr);
+	pcl::transformPointCloud(tfed,tfed,test.inverse().matrix());
+	pcl::io::savePCDFile("tfed.pcd",tfed);
     return 0;
 }
