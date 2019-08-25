@@ -7,7 +7,17 @@
 #include<ceres/ceres.h>
 #include <pcl/registration/ndt.h>      //NDT(正态分布)配准类头文件
 #include <pcl/filters/approximate_voxel_grid.h>   //滤波类头文件  （使用体素网格过滤器处理的效果比较好）
-
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/console/parse.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/sample_consensus/ransac.h>
+#include <pcl/sample_consensus/sac_model_plane.h>
+#include <pcl/sample_consensus/sac_model_sphere.h>
+#include <pcl/ModelCoefficients.h>
+#include <pcl/filters/project_inliers.h>
+#include <pcl/filters/extract_indices.h>
 Eigen::Vector3d px,pz(-0.131814,0.0288355,0.990855),py; //平面法向量
 
 //构建代价函数结构体，abc为待优化参数，residual为残差。
@@ -85,14 +95,43 @@ struct AxisAxisFitting
 	Eigen::Vector3d origin_pt;
 	Eigen::Vector3d target_pt;
 };
-
+// 分割点云的地面部分
+pcl::PointCloud<pcl::PointXYZI> sacPlaneExtract(pcl::PointCloud<pcl::PointXYZI> cloud_filtered1,Eigen::Vector3d& normal_vector){
+	pcl::SACSegmentation<pcl::PointXYZI> seg;
+	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_projected(new pcl::PointCloud<pcl::PointXYZI>);
+	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+	pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+ 	pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+	*cloud_filtered = cloud_filtered1;
+	//1.分割
+	// Optional
+	seg.setOptimizeCoefficients (true);
+	// Mandatory
+	seg.setModelType (pcl::SACMODEL_PLANE);
+	seg.setMethodType (pcl::SAC_RANSAC);
+	seg.setDistanceThreshold (0.1);
+	seg.setInputCloud (cloud_filtered);
+	seg.segment (*inliers, *coefficients);
+	std::cout << "Model coefficients: " << coefficients->values[0] << " "
+			  << coefficients->values[1] << " "
+			  << coefficients->values[2] << " "
+			  << coefficients->values[3] <<std::endl;
+	normal_vector = Eigen::Vector3d(coefficients->values[0],coefficients->values[1],coefficients->values[2]);
+	//2.过滤
+	for (int j = 0; j < inliers->indices.size(); ++j) {
+		cloud_projected->push_back(cloud_filtered->points[inliers->indices[j]]);
+	}
+	return *cloud_projected;
+}
 int main() {
-
+ 	//0.分割点云
+	pcl::PointCloud<pcl::PointXYZI> pointRaw;
+	pcl::io::loadPCDFile<pcl::PointXYZI> ("origin.pcd", pointRaw);
+	pcl::io::savePCDFile("ransas.pcd",sacPlaneExtract(pointRaw,pz));
 	Eigen::Matrix3d rotate;
 	//1.从点云中确定 x 轴的方向
 	//参数初始化设置，abc初始化为0
 	double abc[6]={11,0,0,20,0,3}; //x y z a b c 点向式
-	
 	pcl::PointCloud<pcl::PointXYZ> linePoint;
 	pcl::PointCloud<pcl::PointXYZ> lineout;
 	pcl::io::loadPCDFile<pcl::PointXYZ> ("x.pcd", linePoint);
@@ -101,9 +140,9 @@ int main() {
 	abc[2] = linePoint[2].x;
 	ceres::Problem problem;
 	for (int j = 0; j < linePoint.size(); ++j) {
-		std::cout<<linePoint[j].x<<std::endl;
+	/*	std::cout<<linePoint[j].x<<std::endl;
 		std::cout<<linePoint[j].y<<std::endl;
-		std::cout<<linePoint[j].z<<std::endl<<std::endl;
+		std::cout<<linePoint[j].z<<std::endl<<std::endl;*/
 		//残差的维度为 1（距离） 优化的维度为 6
 		//1.resident 2. methord 3. which to opti
 		//1 new ceres::AutoDiffCostFunction<CURVE_FITTING_COST,2,6>(new CURVE_FITTING_COST(linePoint[j].x,linePoint[j].y,linePoint[j].z))   ->AutoDiffCostFunction
@@ -113,7 +152,7 @@ int main() {
 	}
 	ceres::Solver::Options options;
   	options.linear_solver_type=ceres::DENSE_QR;
-  	options.minimizer_progress_to_stdout=true;
+  	options.minimizer_progress_to_stdout= false;
   	ceres::Solver::Summary summary;
   	ceres::Solve(options,&problem,&summary);
 	std::cout<<"x= "<<abc[0]<<std::endl;
@@ -135,8 +174,7 @@ int main() {
 		temp.z = abc[5]*d + abc[2];
 		lineout.push_back(temp);
 	}
-
-
+	
 	pcl::io::savePCDFile("lineout.pcd",lineout);
 	Eigen::Vector3d x_aixs,z_axis;
 	x_aixs = Eigen::Vector3d(abc[3],abc[4],abc[5]);
@@ -210,6 +248,7 @@ int main() {
 	test.translate(t_w_curr);
 	test.rotate(q_w_curr);
 	pcl::transformPointCloud(tfed,tfed,test.inverse().matrix());
+	std::cout<<"校正后的矩阵为: \n"<<test.inverse().matrix()<<std::endl;
 	pcl::io::savePCDFile("tfed.pcd",tfed);
     return 0;
 }
