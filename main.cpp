@@ -5,8 +5,8 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include<ceres/ceres.h>
-#include <pcl/registration/ndt.h>      //NDT(正态分布)配准类头文件
-#include <pcl/filters/approximate_voxel_grid.h>   //滤波类头文件  （使用体素网格过滤器处理的效果比较好）
+#include <pcl/registration/ndt.h>      				//NDT(正态分布)配准类头文件
+#include <pcl/filters/approximate_voxel_grid.h>     //滤波类头文件  （使用体素网格过滤器处理的效果比较好）
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
@@ -30,7 +30,7 @@ double dist(double x0, double x1, double y0,double y1,double z0, double z1, doub
 	d = calc_d(a,b,c,x0,y0,z0,x1,y1,z1);
 	return sqrt((x0-a*d-x1)*(x0-a*d-x1) + (y0-b*d-y1)*(y0-b*d-y1) + (z0-c*d-z1)*(z0-c*d-z1));
 }
-
+//拟合一个和平面法向量垂直的 x轴
 struct CURVE_FITTING_COST
 {
   CURVE_FITTING_COST(double x,double y,double z):x0(x),y0(y),z0(z){}
@@ -66,8 +66,6 @@ struct VERTICLE_FITTING
 	}
 	const double x0,y0,z0,x1,y1,z1;
 };
-
-
 
 //输入构造:两点 输入:RT 残差:两点距离
 struct AxisAxisFitting
@@ -140,9 +138,6 @@ int main() {
 	abc[2] = linePoint[2].x;
 	ceres::Problem problem;
 	for (int j = 0; j < linePoint.size(); ++j) {
-	/*	std::cout<<linePoint[j].x<<std::endl;
-		std::cout<<linePoint[j].y<<std::endl;
-		std::cout<<linePoint[j].z<<std::endl<<std::endl;*/
 		//残差的维度为 1（距离） 优化的维度为 6
 		//1.resident 2. methord 3. which to opti
 		//1 new ceres::AutoDiffCostFunction<CURVE_FITTING_COST,2,6>(new CURVE_FITTING_COST(linePoint[j].x,linePoint[j].y,linePoint[j].z))   ->AutoDiffCostFunction
@@ -155,12 +150,12 @@ int main() {
   	options.minimizer_progress_to_stdout= false;
   	ceres::Solver::Summary summary;
   	ceres::Solve(options,&problem,&summary);
-	std::cout<<"x= "<<abc[0]<<std::endl;
-	std::cout<<"y= "<<abc[1]<<std::endl;
-	std::cout<<"z= "<<abc[2]<<std::endl;
-	std::cout<<"a= "<<abc[3]<<std::endl;
-	std::cout<<"b= "<<abc[4]<<std::endl;
-	std::cout<<"c= "<<abc[5]<<std::endl;
+	std::cout<<" x= "<<abc[0]<<std::endl;
+	std::cout<<" y= "<<abc[1];
+	std::cout<<" z= "<<abc[2];
+	std::cout<<" a= "<<abc[3];
+	std::cout<<" b= "<<abc[4];
+	std::cout<<" c= "<<abc[5];
 	px = Eigen::Vector3d(50.546,0,6.2455);
 
 	py = pz.cross(px);
@@ -195,9 +190,6 @@ int main() {
 	// 计算4 个坐标点之间的距离 (1).坐标原点 (2). 到(1,0,0) (3). 到 (0,1,0) (4) 到 (0,0,1)
 	
 	double parameters[7] = {1, 2, 3, 4, 5, 6, 7};
-	std::cout<<*parameters<<std::endl;
-	std::cout<<*parameters+4<<std::endl;
-	
 	// Map类用于通过C++中普通的连续指针或者数组 （raw C/C++ arrays）来构造Eigen里的Matrix类，这就好比Eigen里的Matrix类的数据和raw C++array 共享了一片地址，也就是引用。
 //	1. 比如有个API只接受普通的C++数组，但又要对普通数组进行线性代数操作，那么用它构造为Map类，直接操作Map就等于操作了原始普通数组，省时省力。
 //	2. 再比如有个庞大的Matrix类，在一个大循环中要不断读取Matrix中的一段连续数据，如果你每次都用block operation 去引用数据，太累（虽然block operation 也是引用类型）。
