@@ -121,11 +121,22 @@ pcl::PointCloud<pcl::PointXYZI> sacPlaneExtract(pcl::PointCloud<pcl::PointXYZI> 
 	}
 	return *cloud_projected;
 }
+pcl::PointCloud<pcl::PointXYZI> getxPCD(pcl::PointCloud<pcl::PointXYZI> sacpoints){
+	pcl::PointCloud<pcl::PointXYZI> result;
+	for (int i = 0; i < sacpoints.size(); ++i) {
+		if (fabs(sacpoints.points[i].y)<0.01)
+			result.push_back(sacpoints.points[i]);
+	}
+	return result;
+}
 int main() {
  	//0.分割点云
 	pcl::PointCloud<pcl::PointXYZI> pointRaw;
+	pcl::PointCloud<pcl::PointXYZI> sacpoints;
 	pcl::io::loadPCDFile<pcl::PointXYZI> ("origin.pcd", pointRaw);
-	pcl::io::savePCDFile("ransas.pcd",sacPlaneExtract(pointRaw,pz));
+	sacpoints = sacPlaneExtract(pointRaw,pz);
+	pcl::io::savePCDFile("ransas.pcd",sacpoints);
+	pcl::io::savePCDFile("x.pcd",getxPCD(sacpoints));
 	Eigen::Matrix3d rotate;
 	//1.从点云中确定 x 轴的方向
 	//参数初始化设置，abc初始化为0
@@ -156,9 +167,8 @@ int main() {
 	std::cout<<" a= "<<abc[3];
 	std::cout<<" b= "<<abc[4];
 	std::cout<<" c= "<<abc[5];
-	px = Eigen::Vector3d(50.546,0,6.2455);
-
-	py = pz.cross(px);
+/*	px = Eigen::Vector3d(50.546,0,6.2455);
+	py = pz.cross(px);*/
 	double d;
 	
 	for (double k = -100; k < 200; ++k) {
