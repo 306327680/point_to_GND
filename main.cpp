@@ -166,9 +166,9 @@ int main() {
 	std::cout<<" z= "<<abc[2];
 	std::cout<<" a= "<<abc[3];
 	std::cout<<" b= "<<abc[4];
-	std::cout<<" c= "<<abc[5];
-/*	px = Eigen::Vector3d(50.546,0,6.2455);
-	py = pz.cross(px);*/
+	std::cout<<" c= "<<abc[5]<<std::endl;;
+	px = Eigen::Vector3d(50.546,0,6.2455);
+	py = pz.cross(px);
 	double d;
 	
 	for (double k = -100; k < 200; ++k) {
@@ -227,7 +227,7 @@ int main() {
 	Eigen::Vector3d x_axis(abc[3],abc[4],abc[4]);
 	x_aixs.normalize();
 	a2 = a1 + x_aixs;
-	
+	std::cout<<"a1: "<<a1<<"\n a2: \n"<<a2<<"\n a3: \n"<<a3<<"\n a4: \n"<<a4<<std::endl;
 	ceres::CostFunction *cost_function_1 =  AxisAxisFitting::Create(p1,a1);
 	ceres::CostFunction *cost_function_2 =  AxisAxisFitting::Create(p2,a2);
 	ceres::CostFunction *cost_function_3 =  AxisAxisFitting::Create(p3,a3);
